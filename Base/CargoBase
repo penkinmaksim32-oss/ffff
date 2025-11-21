@@ -1,0 +1,111 @@
+// CargoBase.js
+import { config } from '../config.js';
+import { showNotification, cancelJob, explodeVehicle, getPlayerVehicle, getVehicleType, hasVehicleTakenDamage } from '../utils.js';
+
+export class CargoBase {
+  constructor(type) {
+    this.type = type;
+  }
+
+  onPickupSuccess(deliveryJob) {
+    showNotification(`груз "${this.type}" успешно погружен.`);
+  }
+
+  onDeliverySuccess(deliveryJob) {
+    showNotification(`Груз "${this.type}" успешно доставлен!`);
+  }
+
+  onDamageTaken(deliveryJob) {
+    showNotification(`Груз "${this.type}" поврежден! Заказ отменен.`);
+    cancelJob();
+  }
+
+  onIllegalZoneEnter(deliveryJob) {
+    showNotification(`Вы находились слишком близко к полицейскому участку. Заказ отменен.`);
+    cancelJob();
+  }
+
+  isDeliveryPossible(deliveryJob) {
+    return true; 
+  }
+
+  getReward() {
+    return config.rewards[this.type.toLowerCase()] || 0;
+  }
+}
+
+export class CommonCargo extends CargoBase {
+  constructor() {
+    super('Common');
+  }
+
+  onDeliverySuccess(deliveryJob) {
+    showNotification(`+${this.getReward()}$`);
+  }
+}
+
+export class HardCargo extends CargoBase {
+  constructor() {
+    super('Hard');
+  }
+
+  onDamageTaken(deliveryJob) {
+    showNotification(`Вы уничтожили груз "${this.type}"! Заказ отменен.`);
+    cancelJob();
+  }
+
+  onDeliverySuccess(deliveryJob) {
+    showNotification(`+${this.getReward()}$`);
+  }
+}
+
+export class DangerCargo extends CargoBase {
+  constructor() {
+    super('Dangerous');
+  }
+
+  onDamageTaken(deliveryJob) {
+    const playerVehicle = getPlayerVehicle();
+    if (playerVehicle) {
+      explodeVehicle(playerVehicle);
+    }
+    showNotification(`Вы взорвали груз "${this.type}"! Заказ отменен.`);
+    cancelJob();
+  }
+
+  onDeliverySuccess(deliveryJob) {
+    showNotification(`+${this.getReward()}$`);
+  }
+}
+
+export class IllegalCargo extends CargoBase {
+  constructor() {
+    super('Illegal');
+  }
+
+  onIllegalZoneEnter(deliveryJob) {
+    showNotification(`Вы находились слишком близко к полицейскому участку. Заказ отменен.`);
+    cancelJob();
+  }
+
+  isDeliveryPossible(deliveryJob) {
+    const playerPosition = getPlayerPosition();
+    for (const policeStation of config.policeStations) {
+      if (getDistance(playerPosition, policeStation) <= policeStation.radius) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  onDeliverySuccess(deliveryJob) {
+    showNotification(`+${this.getReward()}$`);
+  }
+}
+
+export const cargoTypes = {
+  common: CommonCargo,
+  hard: HardCargo,
+  dangerous: DangerCargo,
+  illegal: IllegalCargo,
+};
