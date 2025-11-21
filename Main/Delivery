@@ -1,0 +1,178 @@
+// DeliveryJob.js
+import { config } from '../config.js';
+import {
+  getRandomElement,
+  getDistance,
+  showNotification,
+  getPlayerVehicle,
+  getVehicleType,
+  getPlayerPosition,
+  hasVehicleTakenDamage,
+  cancelJob
+} from '../utils.js';
+import { PointLoad, PointUnload } from './PointBase.js';
+import { VehicleBlocker } from './VehicleBlocker.js';
+import { cargoTypes } from './CargoBase.js';
+
+export class DeliveryJob {
+  constructor() {
+    this.cargo = null;
+    this.loadPoint = null;
+    this.unloadPoint = null;
+    this.vehicleBlocker = null;
+    this.currentVehicle = null;
+    this.jobActive = false;
+    this.damageCheckInterval = null;
+    this.policeCheckInterval = null;
+    this.playerPosCheckInterval = null;
+  }
+
+  startNewJob() {
+    if (this.jobActive) {
+      showNotification("У вас уже есть активный заказ.");
+      return;
+    }
+
+    let loadCoords, unloadCoords;
+    do {
+      loadCoords = getRandomElement(config.loadingPoints);
+      unloadCoords = getRandomElement(config.unloadingPoints);
+    } while (getDistance(loadCoords, unloadCoords) < 50); 
+
+    this.loadPoint = new PointLoad(loadCoords);
+    this.unloadPoint = new PointUnload(unloadCoords);
+
+    const randomCargoType = getRandomElement(Object.keys(cargoTypes));
+    this.cargo = new cargoTypes[randomCargoType]();
+
+    this.jobActive = true;
+    this.loadPoint.createBlip();
+    showNotification(`Новый заказ: доставь ${this.cargo.type} груз.`);
+
+    this.startMonitoring();
+  }
+
+  startMonitoring() {
+    this.damageCheckInterval = setInterval(() => this.checkVehicleDamage(), 500);
+    this.policeCheckInterval = setInterval(() => this.checkPoliceZone(), 500);
+    this.playerPosCheckInterval = setInterval(() => this.checkPlayerPosition(), 100); 
+  }
+
+  stopMonitoring() {
+    clearInterval(this.damageCheckInterval);
+    clearInterval(this.policeCheckInterval);
+    clearInterval(this.playerPosCheckInterval);
+    this.damageCheckInterval = null;
+    this.policeCheckInterval = null;
+    this.playerPosCheckInterval = null;
+  }
+
+  checkVehicleDamage() {
+    if (!this.jobActive || !this.currentVehicle) return;
+
+    if (hasVehicleTakenDamage(this.currentVehicle)) {
+      this.cargo.onDamageTaken(this);
+      this.cancelJob();
+    }
+  }
+
+  checkPoliceZone() {
+    if (!this.jobActive || this.cargo.type === 'Illegal') return;
+
+    const playerPosition = getPlayerPosition();
+    for (const policeStation of config.policeStations) {
+      if (getDistance(playerPosition, policeStation) <= policeStation.radius) {
+        this.cargo.onIllegalZoneEnter(this);
+        this.cancelJob();
+        break;
+      }
+    }
+  }
+
+  checkPlayerPosition() {
+    if (!this.jobActive) return;
+
+    const playerPosition = getPlayerPosition();
+    const playerVehicle = getPlayerVehicle();
+    const vehicleType = playerVehicle ? getVehicleType(playerVehicle) : null;
+
+    if (playerVehicle && !config.allowedVehicles.includes(vehicleType)) {
+      showNotification("Этот транспорт не подходит для перевозки груза.");
+      this.cancelJob();
+      return;
+    }
+
+    if (playerVehicle && !this.currentVehicle) {
+      this.currentVehicle = playerVehicle;
+      this.vehicleBlocker = new VehicleBlocker(this.currentVehicle);
+    } else if (!playerVehicle && this.currentVehicle) {
+      this.currentVehicle = null;
+      this.vehicleBlocker = null;
+    }
+
+    // Погрузка
+    if (this.loadPoint && this.loadPoint.isPlayerInRange(playerPosition)) {
+      if (!this.vehicleBlocker || !this.vehicleBlocker.isVehicleBlocked()) {
+        this.handlePickup();
+      }
+    }
+
+    // Разгрузка
+    if (this.unloadPoint && this.unloadPoint.isPlayerInRange(playerPosition)) {
+      this.handleDelivery();
+    }
+  }
+
+  handlePickup() {
+    if (!this.jobActive || !this.currentVehicle) return;
+
+    showNotification("Погрузка началась...");
+    this.vehicleBlocker.block();
+
+    setTimeout(() => {
+      if (!this.jobActive || !this.currentVehicle) return; 
+
+      this.loadPoint.removeBlip();
+      this.loadPoint = null;
+      this.unloadPoint.createBlip();
+      this.cargo.onPickupSuccess(this);
+      showNotification(`Доставьте груз в указанную точку.`);
+    }, config.misc.loadingBlockDuration);
+  }
+
+  handleDelivery() {
+    if (!this.jobActive || !this.unloadPoint) return;
+
+    if (!this.cargo.isDeliveryPossible(this)) {
+      this.cargo.onIllegalZoneEnter(this); 
+      this.cancelJob();
+      return;
+    }
+
+    this.unloadPoint.removeBlip();
+    this.unloadPoint = null;
+    this.cargo.onDeliverySuccess(this);
+    this.rewardPlayer(this.cargo.getReward());
+    this.cancelJob();
+  }
+
+  rewardPlayer(amount) {
+    console.log(`Player rewarded: ${amount}$`);
+    // mp.events.call('player:addMoney', amount);
+  }
+
+  cancelJob() {
+    if (!this.jobActive) return;
+
+    this.jobActive = false;
+    this.stopMonitoring();
+    if (this.loadPoint) this.loadPoint.removeBlip();
+    if (this.unloadPoint) this.unloadPoint.removeBlip();
+    this.cargo = null;
+    this.loadPoint = null;
+    this.unloadPoint = null;
+    this.vehicleBlocker = null;
+    this.currentVehicle = null;
+    showNotification("Заказ отменен.");
+  }
+}
