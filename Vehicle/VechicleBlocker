@@ -1,0 +1,24 @@
+// VehicleBlocker.js
+import { config } from '../config.js';
+import { blockVehicle } from '../utils.js';
+
+export class VehicleBlocker {
+  constructor(vehicle) {
+    this.vehicle = vehicle;
+    this.isBlocked = false;
+  }
+
+  block() {
+    if (!this.isBlocked) {
+      blockVehicle(this.vehicle, config.misc.loadingBlockDuration);
+      this.isBlocked = true;
+      setTimeout(() => {
+        this.isBlocked = false;
+      }, config.misc.loadingBlockDuration);
+    }
+  }
+
+  isVehicleBlocked() {
+    return this.isBlocked;
+  }
+}
