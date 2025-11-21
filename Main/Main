@@ -1,0 +1,11 @@
+// main.js 
+import { config } from './config.js';
+import { DeliveryJob } from './DeliveryJob.js';
+
+const deliveryJob = new DeliveryJob();
+
+console.log("Система доставки готова. Введите команду /startdelivery для начала.");
+
+function startDeliveryCommand() {
+  deliveryJob.startNewJob();
+}
