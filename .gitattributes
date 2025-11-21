@@ -1,2 +1,3 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+import * as utils from './utils.js';
+const vehicle = utils.getPlayerVehicle();
+utils.showNotification(\`Транспорт: \${vehicle.model}\`);
