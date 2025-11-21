@@ -1,0 +1,40 @@
+// PointBase.js
+import { config } from '../config.js';
+import { getDistance, setBlip, removeBlip } from '../utils.js';
+
+export class PointBase {
+  constructor(coords, settings) {
+    this.coords = coords;
+    this.settings = settings;
+    this.blip = null;
+  }
+
+  createBlip() {
+    this.blip = setBlip(this.coords, this.settings.marker, this.settings.blip);
+  }
+
+  removeBlip() {
+    removeBlip(this.blip);
+    this.blip = null;
+  }
+
+  isPlayerInRange(playerPosition) {
+    return getDistance(this.coords, playerPosition) <= this.settings.radius;
+  }
+
+  getCoordinates() {
+    return this.coords;
+  }
+}
+
+export class PointLoad extends PointBase {
+  constructor(coords) {
+    super(coords, config.pointSettings.loading);
+  }
+}
+
+export class PointUnload extends PointBase {
+  constructor(coords) {
+    super(coords, config.pointSettings.unloading);
+  }
+}
